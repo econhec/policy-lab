@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Economic Policy Lab</title>
+<style>
+  :root{
+    --bg:#fff; --ink:#1f2937; --muted:#6b7280;
+    --blue:#2563eb; --green:#16a34a; --violet:#7c3aed; --amber:#f59e0b;
+    --line:#e5e7eb;
+  }
+  body{margin:0;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial;color:var(--ink);background:var(--bg);}
+  .wrap{max-width:1200px;margin:0 auto;padding:16px;}
+  h1{font-size:22px;margin:0 0 8px;}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:12px;color:#374151;margin:4px 0 12px;}
+  .chip{width:14px;height:2px;display:inline-block;border-radius:2px}
+  .chip.blue{background:var(--blue)} .chip.green{background:var(--green)}
+  .chip.violet{background:var(--violet)} .chip.amber{background:var(--amber)}
+  .chip.dash{background:repeating-linear-gradient(90deg,#6b7280 0 4px,transparent 4px 7px)}
+  .grid{display:grid;grid-template-columns:1fr 340px;gap:16px}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;box-shadow:0 1px 2px rgba(0,0,0,.02)}
+  .row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .row.space{justify-content:space-between}
+  .inputs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .inputs2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end}
+  .inputs3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  @media (max-width:700px){.inputs3{grid-template-columns:1fr}}
+  label{font-size:12px;color:var(--muted);display:block}
+  input[type="number"]{
+    width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;
+    font:600 15px/1.2 ui-monospace,Menlo,Consolas,monospace;height:40px;box-sizing:border-box;
+  }
+  input[type="checkbox"]{transform:translateY(1px)}
+  button{padding:8px 10px;font:13px system-ui,-apple-system,Segoe UI,Roboto,Arial;border-radius:10px;border:1px solid var(--line);background:#f8fafc;cursor:pointer}
+  .stat{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .stat:last-child{border-bottom:0}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:600;text-align:right}
+  .msg{display:none;margin:8px 0;padding:8px 10px;border-radius:8px;font-size:13px}
+  .msg[data-kind="error"]{display:block;background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+  .msg[data-kind="note"]{display:block;background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+  .hint{font-size:12px;color:#6b7280;margin-top:6px}
+  svg{display:block;width:100%;height:62vh;border:1px solid var(--line);border-radius:12px;background:#fafafa}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Economic Policy Lab</h1>
+  <div class="legend">
+    <span><span class="chip blue"></span> Demand</span>
+    <span><span class="chip green"></span> Supply</span>
+    <span><span class="chip violet"></span> SMB</span>
+    <span><span class="chip amber"></span> SMC</span>
+    <span><span class="chip dash"></span> Demand or supply after a tax or subsidy</span>
+  </div>
+
+  <svg id="plot" viewBox="0 0 820 540" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Supply and demand chart"></svg>
+
+  <div class="grid" style="margin-top:12px;">
+    <div class="card">
+      <div class="row" style="margin-bottom:8px;">
+        <button id="reset" type="button">Reset curves</button>
+        <label class="row" style="gap:6px;margin-left:10px;"><input type="checkbox" id="areas" checked> Show CS/PS areas</label>
+        <label class="row" style="gap:6px;margin-left:10px;"><input type="checkbox" id="showDWL" checked> Show DWL area</label>
+        <label class="row" style="gap:6px;margin-left:10px;"><input type="checkbox" id="showSMB"> Show SMB/SMC curve</label>
+      </div>
+
+      <div class="inputs3">
+        <div class="card">
+          <strong>Demand endpoints</strong>
+          <div class="inputs" style="margin-top:8px;">
+            <div><label for="d1q">D1.Q</label><input id="d1q" type="number" min="0" max="10000" value="0"></div>
+            <div><label for="d1p">D1.P</label><input id="d1p" type="number" min="0" max="10000" value="90"></div>
+            <div><label for="d2q">D2.Q</label><input id="d2q" type="number" min="0" max="10000" value="90"></div>
+            <div><label for="d2p">D2.P</label><input id="d2p" type="number" min="0" max="10000" value="0"></div>
+          </div>
+        </div>
+        <div class="card">
+          <strong>Supply endpoints</strong>
+          <div class="inputs" style="margin-top:8px;">
+            <div><label for="s1q">S1.Q</label><input id="s1q" type="number" min="0" max="10000" value="0"></div>
+            <div><label for="s1p">S1.P</label><input id="s1p" type="number" min="0" max="10000" value="10"></div>
+            <div><label for="s2q">S2.Q</label><input id="s2q" type="number" min="0" max="10000" value="90"></div>
+            <div><label for="s2p">S2.P</label><input id="s2p" type="number" min="0" max="10000" value="90"></div>
+          </div>
+        </div>
+        <div class="card">
+          <strong>Externalities</strong>
+          <div class="inputs2" style="margin-top:8px;">
+            <div>
+              <label for="consExt">Consumption Externality (per unit)</label>
+              <input id="consExt" type="number" min="-10000" max="10000" step="1" value="0">
+            </div>
+            <div>
+              <label for="prodExt">Production Externality (per unit)</label>
+              <input id="prodExt" type="number" min="-10000" max="10000" step="1" value="0">
+            </div>
+          </div>
+          <div class="hint">
+            SMB = Demand + Consumption Externality. SMC = Supply − Production Externality.
+            (Positive values mean positive externalities; negative values mean negative externalities.)
+          </div>
+        </div>
+      </div>
+
+      <div class="inputs3" style="margin-top:12px;">
+        <div class="card">
+          <strong>Price controls</strong>
+          <div class="inputs" style="margin-top:8px;">
+            <div><label><input type="checkbox" id="ceilingOn"> Price ceiling</label><input id="ceiling" type="number" min="0" max="10000" value="40" aria-label="Price ceiling"></div>
+            <div><label><input type="checkbox" id="floorOn"> Price floor</label><input id="floor" type="number" min="0" max="10000" value="60" aria-label="Price floor"></div>
+            <div><label><input type="checkbox" id="quotaOn"> Quota (Q)</label><input id="quotaQ" type="number" min="0" max="10000" value="40" aria-label="Quota quantity"></div>
+          </div>
+        </div>
+        <div class="card">
+          <strong>Taxes</strong>
+          <div class="inputs" style="margin-top:8px;">
+            <div><label><input type="checkbox" id="taxCOn"> Consumer tax /unit</label><input id="taxC" type="number" min="0" max="10000" value="0" aria-label="Consumer tax per unit"></div>
+            <div><label><input type="checkbox" id="taxPOn"> Producer tax /unit</label><input id="taxP" type="number" min="0" max="10000" value="0" aria-label="Producer tax per unit"></div>
+          </div>
+        </div>
+        <div class="card">
+          <strong>Subsidies</strong>
+          <div class="inputs" style="margin-top:8px;">
+            <div><label><input type="checkbox" id="subCOn"> Consumer subsidy /unit</label><input id="subC" type="number" min="0" max="10000" value="0" aria-label="Consumer subsidy per unit"></div>
+            <div><label><input type="checkbox" id="subPOn"> Producer subsidy /unit</label><input id="subP" type="number" min="0" max="10000" value="0" aria-label="Producer subsidy per unit"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="results">
+      <strong>Results</strong>
+      <div class="msg" id="msg" role="status" aria-live="polite"></div>
+      <div class="stat"><span>Demand (P = a − bQ)</span><span class="mono" id="statDem"></span></div>
+      <div class="stat"><span>Supply (P = c + dQ)</span><span class="mono" id="statSup"></span></div>
+      <div class="stat"><span>Free private equilibrium</span><span class="mono" id="statEqFree"></span></div>
+      <div class="stat"><span>Optimal (Q*)</span><span class="mono" id="statOpt"></span></div>
+      <div class="stat"><span>Binding controls</span><span class="mono" id="statBind">None</span></div>
+      <div class="stat"><span>Traded outcome</span><span class="mono" id="statOut"></span></div>
+      <div class="stat"><span>Shortage / surplus</span><span class="mono" id="statGap"></span></div>
+      <div class="stat"><span>Consumer surplus</span><span class="mono" id="statCS"></span></div>
+      <div class="stat"><span>Producer surplus</span><span class="mono" id="statPS"></span></div>
+      <div class="stat"><span>Tax revenue</span><span class="mono" id="statTR"></span></div>
+      <div class="stat"><span>Subsidy outlay</span><span class="mono" id="statSO"></span></div>
+      <div class="stat"><span>Government (net)</span><span class="mono" id="statGN"></span></div>
+      <div class="stat"><span>External benefit (− cost)</span><span class="mono" id="statExt"></span></div>
+      <div class="stat"><span>Total surplus</span><span class="mono" id="statTS"></span></div>
+      <div class="stat"><span>Deadweight loss</span><span class="mono" id="statDWL"></span></div>
+      <div class="hint">
+        Pc is the price buyers pay and Pp the price sellers receive, taxes and subsidies included.
+        Price ceilings and floors apply to the market price, before taxes and subsidies.
+        Under a binding quota, sellers receive the demand price, so the quota rent is part of producer surplus.
+      </div>
+      <div class="hint">
+        Total surplus = CS + PS + Government (net) + External benefit. DWL is the total surplus lost relative to the optimal Q*.
+        If no externalities, Q* is the free private-market equilibrium. With externalities, Q* is where SMB = SMC.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ------------------------------------------------------------------
+     Model
+     Demand: P = a − bQ, supply: P = c + dQ, each given by two points.
+     Neither curve goes below P = 0: willingness to pay is max(0, a − bQ)
+     and marginal cost is max(0, c + dQ).
+     Taxes and subsidies drive a wedge between the market price Pm, the
+     price buyers pay (Pc = Pm + consumer tax − consumer subsidy) and the
+     price sellers receive (Pp = Pm − producer tax + producer subsidy).
+     Price ceilings and floors constrain Pm. A quota caps Q; the market
+     price then rises to the demand price, so sellers keep the rent.
+     ------------------------------------------------------------------ */
+
+  const W=820, H=540, PAD=48, EPS=1e-7, NS='http://www.w3.org/2000/svg';
+  const plot=document.getElementById('plot');
+  const I = id => document.getElementById(id);
+
+  // Chart layers. Everything except axes and markers is clipped to the plot area.
+  const defs=el('defs'), clip=el('clipPath'), clipRect=el('rect');
+  clip.setAttribute('id','plotClip');
+  setAttrs(clipRect,{x:PAD, y:PAD-1, width:W-2*PAD+1, height:H-2*PAD+1});
+  clip.appendChild(clipRect); defs.appendChild(clip); plot.appendChild(defs);
+  const axes=el('g'), areasG=el('g'), dwlG=el('g'), curves=el('g'), markers=el('g');
+  [areasG,dwlG,curves].forEach(n=>n.setAttribute('clip-path','url(#plotClip)'));
+  [axes,areasG,dwlG,curves,markers].forEach(n=>plot.appendChild(n));
+
+  const ids=['d1q','d1p','d2q','d2p','s1q','s1p','s2q','s2p','consExt','prodExt',
+             'ceilingOn','floorOn','quotaOn','ceiling','floor','quotaQ',
+             'taxCOn','taxPOn','subCOn','subPOn','taxC','taxP','subC','subP',
+             'areas','showDWL','showSMB'];
+  ids.forEach(id=>I(id).addEventListener('input',draw));
+  I('reset').addEventListener('click',()=>{
+    I('d1q').value=0; I('d1p').value=90; I('d2q').value=90; I('d2p').value=0;
+    I('s1q').value=0; I('s1p').value=10; I('s2q').value=90; I('s2p').value=90;
+    I('consExt').value=0; I('prodExt').value=0;
+    ['ceilingOn','floorOn','quotaOn','taxCOn','taxPOn','subCOn','subPOn'].forEach(k=>I(k).checked=false);
+    I('areas').checked=true; I('showDWL').checked=true; I('showSMB').checked=false;
+    I('ceiling').value=40; I('floor').value=60; I('quotaQ').value=40;
+    I('taxC').value=0; I('taxP').value=0; I('subC').value=0; I('subP').value=0;
+    draw();
+  });
+
+  // Numbers are always shown with a decimal point, whatever the browser language.
+  function fmt(x){
+    if(x===Infinity) return 'unlimited';
+    if(!isFinite(x)) return '—';
+    if(Math.abs(x)<0.005) x=0;
+    return Number(x).toLocaleString('en-US',{maximumFractionDigits:2});
+  }
+
+  /* ---------- inputs ---------- */
+  function val(id){ const t=I(id).value.trim(); return t==='' ? NaN : Number(t); }
+  function read(){
+    return {
+      d1:{Q:val('d1q'),P:val('d1p')}, d2:{Q:val('d2q'),P:val('d2p')},
+      s1:{Q:val('s1q'),P:val('s1p')}, s2:{Q:val('s2q'),P:val('s2p')},
+      consExt:val('consExt'), prodExt:val('prodExt'),
+      ceilingOn:I('ceilingOn').checked, floorOn:I('floorOn').checked, quotaOn:I('quotaOn').checked,
+      ceiling:val('ceiling'), floor:val('floor'), quotaQ:val('quotaQ'),
+      taxCOn:I('taxCOn').checked, taxC:val('taxC'),
+      taxPOn:I('taxPOn').checked, taxP:val('taxP'),
+      subCOn:I('subCOn').checked, subC:val('subC'),
+      subPOn:I('subPOn').checked, subP:val('subP'),
+      showAreas:I('areas').checked, showDWL:I('showDWL').checked, showSMB:I('showSMB').checked
+    };
+  }
+
+  // Returns a message for the user if the inputs cannot be used, otherwise null.
+  function validate(a){
+    const ok = v => Number.isFinite(v) && v>=0;
+    if(![a.d1,a.d2,a.s1,a.s2].every(p=>ok(p.Q)&&ok(p.P)))
+      return 'Enter a number (zero or more) in every demand and supply box.';
+    if(a.d1.Q===a.d2.Q)
+      return a.d1.P===a.d2.P ? 'The two demand points are identical. Enter two different points.'
+        : 'Demand is vertical (both points have the same Q). Vertical curves are not supported: use a very steep line instead, for example Q = 50 and Q = 50.1.';
+    if(a.s1.Q===a.s2.Q)
+      return a.s1.P===a.s2.P ? 'The two supply points are identical. Enter two different points.'
+        : 'Supply is vertical (both points have the same Q). Vertical curves are not supported: use a very steep line instead, for example Q = 50 and Q = 50.1.';
+    if((a.d1.P-a.d2.P)/(a.d1.Q-a.d2.Q) > 0)
+      return 'Demand must slope downward (or be flat): the point with the larger Q needs the lower P.';
+    if((a.s1.P-a.s2.P)/(a.s1.Q-a.s2.Q) < 0)
+      return 'Supply must slope upward (or be flat): the point with the larger Q needs the higher P.';
+    if(a.d1.P===a.d2.P && a.s1.P===a.s2.P)
+      return 'Demand and supply are both flat, so there is no single equilibrium. Give at least one curve a slope.';
+    if(!Number.isFinite(a.consExt) || !Number.isFinite(a.prodExt))
+      return 'Enter a number in both externality boxes (0 for no externality).';
+    const pol=[['ceilingOn','ceiling','price ceiling'],['floorOn','floor','price floor'],['quotaOn','quotaQ','quota'],
+               ['taxCOn','taxC','consumer tax'],['taxPOn','taxP','producer tax'],
+               ['subCOn','subC','consumer subsidy'],['subPOn','subP','producer subsidy']];
+    for(const [on,k,name] of pol) if(a[on] && !ok(a[k])) return 'Enter a number (zero or more) for the '+name+'.';
+    if(a.ceilingOn && a.floorOn && a.floor>a.ceiling)
+      return 'The price floor is above the price ceiling, so no price satisfies both. Lower the floor or raise the ceiling.';
+    return null;
+  }
+
+  /* ---------- computation ---------- */
+  function lin(p1,p2){ const m=(p1.P-p2.P)/(p1.Q-p2.Q); return {m, a:p1.P-m*p1.Q}; }
+
+  // Smallest q >= 0 where f(q) <= 0, for a non-increasing piecewise-linear f
+  // whose slope changes only at the given kinks. Infinity if f stays positive.
+  function rootDec(f,kinks){
+    if(f(0)<=0) return 0;
+    const xs=[0].concat(kinks.filter(k=>k>0 && isFinite(k)).sort((p,q)=>p-q));
+    for(let i=1;i<xs.length;i++){
+      const x0=xs[i-1], x1=xs[i], f0=f(x0), f1=f(x1);
+      if(f1<=0) return x0+(x1-x0)*f0/(f0-f1);
+    }
+    const x0=xs[xs.length-1], f0=f(x0), slope=f(x0+1)-f0;
+    if(slope>-1e-12) return Infinity;
+    return x0-f0/slope;
+  }
+
+  function compute(a){
+    const D=lin(a.d1,a.d2), S=lin(a.s1,a.s2);
+    const aD=D.a, bD=Math.max(0,-D.m), cS=S.a, dS=Math.max(0,S.m);
+    const q1 = bD>0 ? aD/bD : Infinity;           // demand reaches P = 0 here
+    const q0 = (cS<0 && dS>0) ? -cS/dS : 0;       // supply leaves P = 0 here
+    const kinks=[q0,q1];
+
+    const WTP = q => Math.max(0, aD-bD*q);        // private marginal benefit
+    const MC  = q => Math.max(0, cS+dS*q);        // private marginal cost
+    const GB  = q => bD>0 ? (q<=q1 ? aD*q-0.5*bD*q*q : aD*aD/(2*bD)) : aD*q;   // area under WTP
+    const TC  = q => q<=q0 ? 0 : cS*(q-q0)+0.5*dS*(q*q-q0*q0);                // area under MC
+    const Qd  = P => bD===0 ? (P<=aD ? Infinity : 0) : (P<=0 ? Infinity : Math.max(0,(aD-P)/bD));
+    const Qs  = P => P<0 ? 0 : (dS===0 ? (P>=cS ? Infinity : 0) : Math.max(0,(P-cS)/dS));
+
+    // Market outcome for given tax wedges and controls.
+    function solve(tC,tP,ctl){
+      const pd = q => WTP(q)-tC, ps = q => MC(q)+tP;
+      if(pd(0)-ps(0) <= 0) return {Q:0, Pm:NaN};
+      let Q=rootDec(q=>pd(q)-ps(q), kinks);
+      if(!isFinite(Q)) return {Q:Infinity, Pm:NaN};
+      let Pm=pd(Q);
+      if(ctl.ceilingOn && ctl.ceiling<Pm){ Pm=ctl.ceiling; Q=Math.min(Qd(Pm+tC),Qs(Pm-tP)); }
+      else if(ctl.floorOn && ctl.floor>Pm){ Pm=ctl.floor; Q=Math.min(Qd(Pm+tC),Qs(Pm-tP)); }
+      if(ctl.quotaOn && ctl.quotaQ<Q){
+        Q=ctl.quotaQ; Pm=pd(Q);
+        if(ctl.ceilingOn && Pm>ctl.ceiling) Pm=ctl.ceiling;
+      }
+      return {Q, Pm};
+    }
+
+    const tC=(a.taxCOn?a.taxC:0)-(a.subCOn?a.subC:0);
+    const tP=(a.taxPOn?a.taxP:0)-(a.subPOn?a.subP:0);
+    const ctl={ceilingOn:a.ceilingOn, ceiling:a.ceiling, floorOn:a.floorOn, floor:a.floor, quotaOn:a.quotaOn, quotaQ:a.quotaQ};
+
+    const free=solve(0,0,{});
+    const out=solve(tC,tP,ctl);
+    if(!isFinite(free.Q) || !isFinite(out.Q))
+      return {error:'With these curves and subsidies supply never catches up with demand, so the traded quantity is unlimited. Give supply a slope or lower the subsidy.'};
+
+    // Optimum: SMB = SMC.
+    const SMB = q => WTP(q)+a.consExt, SMC = q => MC(q)-a.prodExt;
+    const Qstar=rootDec(q=>SMB(q)-SMC(q), kinks);
+    if(!isFinite(Qstar))
+      return {error:'With these externalities the social marginal benefit never falls below the social marginal cost, so there is no finite optimal quantity.'};
+
+    const Q=out.Q, traded=Q>EPS;
+    const Pm=out.Pm, Pc=Pm+tC, Pp=Pm-tP;
+
+    // A control is binding if removing it would change the outcome.
+    const binding=[];
+    [['ceilingOn','ceiling'],['floorOn','floor'],['quotaOn','quota']].forEach(([k,name])=>{
+      if(!ctl[k]) return;
+      const alt=solve(tC,tP,Object.assign({},ctl,{[k]:false}));
+      const dP = (traded && alt.Q>EPS) ? Math.abs(alt.Pm-Pm) : 0;
+      if(Math.abs(alt.Q-Q)>EPS || dP>EPS) binding.push(name);
+    });
+
+    // Unserved buyers under a binding ceiling, unsold supply under a binding floor.
+    let shortage=0, surplus=0;
+    if(binding.includes('ceiling')) shortage=Math.max(0,Qd(Pc)-Q);
+    if(binding.includes('floor'))   surplus=Math.max(0,Qs(Pp)-Q);
+
+    const Wf = q => GB(q)-TC(q)+(a.consExt+a.prodExt)*q;   // total surplus at quantity q
+    const cs = traded ? GB(Q)-Pc*Q : 0;
+    const ps = traded ? Pp*Q-TC(Q) : 0;
+    const taxRev = Q*((a.taxCOn?a.taxC:0)+(a.taxPOn?a.taxP:0));
+    const subOut = Q*((a.subCOn?a.subC:0)+(a.subPOn?a.subP:0));
+    const ext = (a.consExt+a.prodExt)*Q;
+    const hasExt = (a.consExt!==0 || a.prodExt!==0);
+
+    return {aD,bD,cS,dS,q0,q1,kinks,WTP,MC,SMB,SMC,tC,tP,
+            free, Q, traded, Pm, Pc, Pp, binding, shortage, surplus,
+            Qstar, Pstar:SMB(Qstar), hasExt,
+            cs, ps, taxRev, subOut, ext, total:Wf(Q), dwl:Math.max(0,Wf(Qstar)-Wf(Q))};
+  }
+
+  /* ---------- chart ---------- */
+  function niceStep(raw){
+    const pow=Math.pow(10,Math.floor(Math.log10(raw))), n=raw/pow;
+    return (n<=1?1:n<=2?2:n<=5?5:10)*pow;
+  }
+  function bounds(a,r){
+    const fin = v => (Number.isFinite(v) && v>0) ? v : 0;
+    let Qmax=Math.max(a.d1.Q,a.d2.Q,a.s1.Q,a.s2.Q,fin(r.Q),fin(r.Qstar),fin(r.free.Q),10);
+    if(isFinite(r.q1) && r.q1<=2.5*Qmax) Qmax=Math.max(Qmax,r.q1);
+    if(a.quotaOn && a.quotaQ<=1.5*Qmax) Qmax=Math.max(Qmax,a.quotaQ);
+    let Pmax=Math.max(a.d1.P,a.d2.P,a.s1.P,a.s2.P,fin(r.aD),fin(r.Pstar),fin(r.free.Pm),10);
+    if(r.traded) Pmax=Math.max(Pmax,fin(r.Pc),fin(r.Pp));
+    if(a.showSMB) Pmax=Math.max(Pmax,fin(r.SMB(0)));
+    if(a.showDWL && r.dwl>EPS){
+      const qa=Math.min(r.Q,r.Qstar), qb=Math.max(r.Q,r.Qstar);
+      Pmax=Math.max(Pmax,fin(r.SMB(qa)),fin(r.SMC(qb)));
+    }
+    if(a.ceilingOn && a.ceiling<=1.5*Pmax) Pmax=Math.max(Pmax,a.ceiling);
+    if(a.floorOn && a.floor<=1.5*Pmax) Pmax=Math.max(Pmax,a.floor);
+    return {maxQ:Qmax*1.12, maxP:Pmax*1.12};
+  }
+  const x=(Q,b)=>PAD+(Q/b.maxQ)*(W-2*PAD);
+  const y=(P,b)=>H-PAD-(P/b.maxP)*(H-2*PAD);
+  const clampP=(P,b)=>Math.min(b.maxP,Math.max(0,P));
+
+  function clearChart(){ [axes,areasG,dwlG,curves,markers].forEach(n=>{while(n.firstChild)n.removeChild(n.firstChild);}); }
+
+  function drawAxes(b){
+    lineAbs(PAD,H-PAD,W-PAD,H-PAD,'#333',axes); lineAbs(PAD,H-PAD,PAD,PAD,'#333',axes);
+    const sq=niceStep(b.maxQ/6), sp=niceStep(b.maxP/6);
+    for(let k=0;k*sq<=b.maxQ*1.0001;k++){ const xx=x(k*sq,b); lineAbs(xx,H-PAD,xx,H-PAD+6,'#666',axes); text(xx,H-PAD+18,fmt(k*sq),'middle',axes); }
+    for(let k=0;k*sp<=b.maxP*1.0001;k++){ const yy=y(k*sp,b); lineAbs(PAD,yy,PAD-6,yy,'#666',axes); text(PAD-10,yy+3,fmt(k*sp),'end',axes); }
+    text(W/2,H-10,'Quantity (Q)','middle',axes);
+    const tY=text(14,H/2,'Price (P)','start',axes);
+    tY.setAttribute('transform','rotate(-90 14 '+(H/2)+')');
+  }
+
+  // Draws f over [from,to], passing through the kinks in between.
+  function curve(f,from,to,kinks,b,stroke,w,dash){
+    if(!(to>from)) return;
+    const qs=[from].concat(kinks.filter(k=>k>from && k<to).sort((p,q)=>p-q),[to]);
+    polyline(qs.map(q=>[x(q,b),y(f(q),b)]),stroke,w,curves,dash);
+  }
+  // Region between two curves from qa to qb.
+  function band(top,bot,qa,qb,kinks,b){
+    const qs=[qa].concat(kinks.filter(k=>k>qa && k<qb).sort((p,q)=>p-q),[qb]);
+    return qs.map(q=>[x(q,b),y(top(q),b)]).concat(qs.slice().reverse().map(q=>[x(q,b),y(bot(q),b)]));
+  }
+
+  function showMessage(kind,t){ const m=I('msg'); m.dataset.kind=kind; m.textContent=t; }
+
+  function fail(message){
+    clearChart();
+    const b={maxQ:100,maxP:100};
+    drawAxes(b);
+    const t=text(W/2,H/2,'Check the inputs','middle',markers); t.setAttribute('font-size','16px'); t.setAttribute('fill','#991b1b');
+    showMessage('error',message);
+    ['statDem','statSup','statEqFree','statOpt','statBind','statOut','statGap','statCS','statPS','statTR','statSO','statGN','statExt','statTS','statDWL']
+      .forEach(id=>setText(id,'—'));
+  }
+
+  function draw(){
+    const a=read();
+    const problem=validate(a);
+    if(problem){ fail(problem); return; }
+    const r=compute(a);
+    if(r.error){ fail(r.error); return; }
+    const b=bounds(a,r);
+
+    clearChart();
+    drawAxes(b);
+
+    // Demand and supply (never below P = 0), with the four points entered.
+    const dEnd=Math.min(r.q1,b.maxQ);
+    curve(r.WTP,0,dEnd,[],b,'#2563eb',2);
+    curve(r.MC,r.q0,b.maxQ,[],b,'#16a34a',2);
+    [a.d1,a.d2].forEach(p=>dot(x(p.Q,b),y(p.P,b),2.5,'#2563eb',curves));
+    [a.s1,a.s2].forEach(p=>dot(x(p.Q,b),y(p.P,b),2.5,'#16a34a',curves));
+
+    // Curves as shifted by taxes and subsidies.
+    if(r.tC!==0) curve(q=>r.aD-r.bD*q-r.tC,0,dEnd,[],b,'#2563eb',1,'4 4');
+    if(r.tP!==0) curve(q=>r.cS+r.dS*q+r.tP,r.q0,b.maxQ,[],b,'#16a34a',1,'4 4');
+
+    if(a.showSMB){
+      curve(r.SMB,0,b.maxQ,r.kinks,b,'#7c3aed',1.5,'4 2');
+      curve(r.SMC,0,b.maxQ,r.kinks,b,'#f59e0b',1.5,'4 2');
+    }
+
+    if(a.ceilingOn) hline(a.ceiling,'Ceiling',b);
+    if(a.floorOn)   hline(a.floor,'Floor',b);
+    if(a.quotaOn)   vline(a.quotaQ,'Quota',b);
+
+    // CS: under demand, above the buyer price. PS: above supply, below the seller price.
+    let hidden=false;
+    if(a.showAreas && r.traded){
+      const flatP = P => (()=>P);
+      hidden = polygon(band(r.WTP,flatP(r.Pc),0,r.Q,r.kinks,b),'rgba(37,99,235,.14)',areasG) || hidden;
+      hidden = polygon(band(flatP(r.Pp),r.MC,0,r.Q,r.kinks,b),'rgba(22,163,74,.14)',areasG) || hidden;
+    }
+
+    // DWL: between SMB and SMC, from the traded quantity to the optimal one.
+    if(a.showDWL && r.dwl>EPS){
+      const pts=band(r.SMB,r.SMC,Math.min(r.Q,r.Qstar),Math.max(r.Q,r.Qstar),r.kinks,b);
+      hidden = polygon(pts, r.hasExt?'rgba(124,58,237,.16)':'rgba(239,68,68,.18)', dwlG) || hidden;
+      polyline(pts.concat([pts[0]]), r.hasExt?'#7c3aed':'#ef4444', 1, dwlG);
+    }
+
+    // Markers: optimum (black) and traded outcome (red, with the price wedge if any).
+    const side = px => px>W-PAD-110 ? {dx:-6,anchor:'end'} : {dx:6,anchor:'start'};
+    const xs=x(r.Qstar,b), ys=y(clampP(r.Pstar,b),b);
+    const same = r.traded && Math.abs(r.Q-r.Qstar)<EPS && Math.abs(r.Pc-r.Pstar)<EPS && Math.abs(r.Pp-r.Pstar)<EPS;
+    dot(xs,ys,4,'#111',markers);
+    if(!same){ const s=side(xs); text(xs+s.dx,ys+14,'Q*='+fmt(r.Qstar),s.anchor,markers); }
+    if(r.traded){
+      const xq=x(r.Q,b), yc=y(clampP(r.Pc,b),b), yp=y(clampP(r.Pp,b),b), s=side(xq);
+      if(Math.abs(r.Pc-r.Pp)>EPS){
+        polyline([[xq,yc],[xq,yp]],'#ef4444',1.5,markers);
+        dot(xq,yp,4,'#ef4444',markers);
+        const lower=Math.max(yc,yp), upper=Math.min(yc,yp);
+        text(xq+s.dx,upper-6,'Q='+fmt(r.Q)+', '+(yc<=yp?'Pc='+fmt(r.Pc):'Pp='+fmt(r.Pp)),s.anchor,markers);
+        text(xq+s.dx,lower+14,(yc<=yp?'Pp='+fmt(r.Pp):'Pc='+fmt(r.Pc)),s.anchor,markers);
+      } else {
+        text(xq+s.dx,yc-6,same?'Q=Q*='+fmt(r.Q):'Q='+fmt(r.Q),s.anchor,markers);
+      }
+      dot(xq,yc,4,'#ef4444',markers);
+    }
+
+    // Results
+    const eqText = (q,p,qn,pn) => q>EPS ? qn+'='+fmt(q)+', '+pn+'='+fmt(p) : qn+'=0 (no trade)';
+    setText('statDem','a='+fmt(r.aD)+', b='+fmt(r.bD));
+    setText('statSup','c='+fmt(r.cS)+', d='+fmt(r.dS));
+    setText('statEqFree',eqText(r.free.Q,r.free.Pm,'Qf','Pf'));
+    setText('statOpt','Q*='+fmt(r.Qstar)+', P*='+fmt(r.Pstar));
+    setText('statBind', r.binding.length?r.binding.join(', '):'None');
+    setText('statOut', r.traded ? 'Q='+fmt(r.Q)+', Pc='+fmt(r.Pc)+', Pp='+fmt(r.Pp) : 'Q=0 (no trade)');
+    setText('statGap', r.shortage>EPS ? 'Shortage '+fmt(r.shortage) : r.surplus>EPS ? 'Surplus '+fmt(r.surplus) : 'None');
+    setText('statCS',fmt(r.cs));
+    setText('statPS',fmt(r.ps));
+    setText('statTR',fmt(r.taxRev));
+    setText('statSO',fmt(r.subOut));
+    setText('statGN',fmt(r.taxRev-r.subOut));
+    setText('statExt',fmt(r.ext));
+    setText('statTS',fmt(r.total));
+    setText('statDWL',fmt(r.dwl));
+
+    if(r.Q>r.q1+EPS) showMessage('note','The traded quantity is beyond the point where demand reaches P = 0. Units past that point have no private value to buyers.');
+    else if(hidden) showMessage('note','Part of a shaded area lies below P = 0 and is not shown on the chart. The numbers in this panel include it.');
+    else showMessage('','');
+  }
+
+  /* ---------- SVG helpers ---------- */
+  function el(name){ return document.createElementNS(NS,name); }
+  function setAttrs(n,o){ for(const k in o) n.setAttribute(k,o[k]); return n; }
+  function lineAbs(x1,y1,x2,y2,stroke,parent){ parent.appendChild(setAttrs(el('line'),{x1,y1,x2,y2,stroke})); }
+  function polyline(points,stroke,w,parent,dash){
+    const n=setAttrs(el('polyline'),{points:points.map(p=>p[0]+','+p[1]).join(' '),fill:'none',stroke,'stroke-width':w||1});
+    if(dash) n.setAttribute('stroke-dasharray',dash);
+    parent.appendChild(n);
+  }
+  // Returns true if part of the polygon lies below the Q axis (and is therefore hidden).
+  function polygon(points,fill,parent){
+    parent.appendChild(setAttrs(el('polygon'),{points:points.map(p=>p[0]+','+p[1]).join(' '),fill}));
+    return points.some(p=>p[1]>H-PAD+0.5);
+  }
+  function dot(cx,cy,r,fill,parent){ parent.appendChild(setAttrs(el('circle'),{cx,cy,r,fill})); }
+  function text(xx,yy,t,anchor,parent){
+    const n=setAttrs(el('text'),{x:xx,y:yy,'text-anchor':anchor,'font-size':'10px',fill:'#374151'});
+    n.textContent=t; parent.appendChild(n); return n;
+  }
+  function hline(P,lab,b){
+    const yy=y(P,b); polyline([[x(0,b),yy],[x(b.maxQ,b),yy]],'#444',1,curves,'6 3');
+    if(P<=b.maxP) text(x(b.maxQ,b)-6,yy-6,lab,'end',markers);
+  }
+  function vline(Q,lab,b){
+    const xx=x(Q,b); polyline([[xx,y(0,b)],[xx,y(b.maxP,b)]],'#444',1,curves,'6 3');
+    if(Q<=b.maxQ) text(xx+6,y(b.maxP,b)+12,lab,'start',markers);
+  }
+  function setText(id,t){ I(id).textContent=t; }
+
+  // Exposed for testing.
+  window.EPL={read, validate, compute};
+
+  draw();
+})();
+</script>
+</body>
+</html>
