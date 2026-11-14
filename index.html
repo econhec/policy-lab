@@ -293,10 +293,16 @@
     // Market outcome for given tax wedges and controls.
     function solve(tC,tP,ctl){
       const pd = q => WTP(q)-tC, ps = q => MC(q)+tP;
-      if(pd(0)-ps(0) <= 0) return {Q:0, Pm:NaN};
+      if(pd(0)-ps(0) <= 0){
+        // No trade: without controls any market price between pd(0) and ps(0) will do.
+        // A ceiling below that range or a floor above it still sets the price.
+        if(ctl.ceilingOn && ctl.ceiling<pd(0)) return {Q:0, Pm:ctl.ceiling};
+        if(ctl.floorOn && ctl.floor>ps(0)) return {Q:0, Pm:ctl.floor};
+        return {Q:0, Pm:NaN};
+      }
+      // Q is unlimited if supply never catches up with demand; a control may still make it finite.
       let Q=rootDec(q=>pd(q)-ps(q), kinks);
-      if(!isFinite(Q)) return {Q:Infinity, Pm:NaN};
-      let Pm=pd(Q);
+      let Pm = isFinite(Q) ? pd(Q) : (bD>0 ? 0 : aD)-tC;
       if(ctl.ceilingOn && ctl.ceiling<Pm){ Pm=ctl.ceiling; Q=Math.min(Qd(Pm+tC),Qs(Pm-tP)); }
       else if(ctl.floorOn && ctl.floor>Pm){ Pm=ctl.floor; Q=Math.min(Qd(Pm+tC),Qs(Pm-tP)); }
       if(ctl.quotaOn && ctl.quotaQ<Q){
@@ -313,24 +319,26 @@
     const free=solve(0,0,{});
     const out=solve(tC,tP,ctl);
     if(!isFinite(free.Q) || !isFinite(out.Q))
-      return {error:'With these curves and subsidies supply never catches up with demand, so the traded quantity is unlimited. Give supply a slope or lower the subsidy.'};
+      return {error:'With these curves and subsidies supply never catches up with demand, so the traded quantity is unlimited. Give supply a slope, lower the subsidy, or add a quota.'};
 
-    // Optimum: SMB = SMC.
+    // Optimum: SMB = SMC. There may be none (SMB always above SMC), or it may be
+    // a corner at Q = 0 (SMB below SMC from the first unit), where no price is defined.
     const SMB = q => WTP(q)+a.consExt, SMC = q => MC(q)-a.prodExt;
     const Qstar=rootDec(q=>SMB(q)-SMC(q), kinks);
-    if(!isFinite(Qstar))
-      return {error:'With these externalities the social marginal benefit never falls below the social marginal cost, so there is no finite optimal quantity.'};
+    const noOptimum=!isFinite(Qstar);
+    const corner=!noOptimum && Qstar<=EPS && SMB(0)<SMC(0)-EPS;
 
     const Q=out.Q, traded=Q>EPS;
     const Pm=out.Pm, Pc=Pm+tC, Pp=Pm-tP;
 
-    // A control is binding if removing it would change the outcome.
+    // A control is binding if removing it would change the quantity or the market price.
     const binding=[];
     [['ceilingOn','ceiling'],['floorOn','floor'],['quotaOn','quota']].forEach(([k,name])=>{
       if(!ctl[k]) return;
       const alt=solve(tC,tP,Object.assign({},ctl,{[k]:false}));
-      const dP = (traded && alt.Q>EPS) ? Math.abs(alt.Pm-Pm) : 0;
-      if(Math.abs(alt.Q-Q)>EPS || dP>EPS) binding.push(name);
+      const had=isFinite(alt.Pm), has=isFinite(Pm);
+      const priceMoved = had!==has || (had && has && Math.abs(alt.Pm-Pm)>EPS);
+      if(!isFinite(alt.Q) || Math.abs(alt.Q-Q)>EPS || priceMoved) binding.push(name);
     });
 
     // Unserved buyers under a binding ceiling, unsold supply under a binding floor.
@@ -348,8 +356,8 @@
 
     return {aD,bD,cS,dS,q0,q1,kinks,WTP,MC,SMB,SMC,tC,tP,
             free, Q, traded, Pm, Pc, Pp, binding, shortage, surplus,
-            Qstar, Pstar:SMB(Qstar), hasExt,
-            cs, ps, taxRev, subOut, ext, total:Wf(Q), dwl:Math.max(0,Wf(Qstar)-Wf(Q))};
+            Qstar, noOptimum, corner, Pstar:(noOptimum||corner) ? NaN : SMB(Qstar), hasExt,
+            cs, ps, taxRev, subOut, ext, total:Wf(Q), dwl:noOptimum ? NaN : Math.max(0,Wf(Qstar)-Wf(Q))};
   }
 
   /* ---------- chart ---------- */
@@ -432,8 +440,8 @@
     [a.s1,a.s2].forEach(p=>dot(x(p.Q,b),y(p.P,b),2.5,'#16a34a',curves));
 
     // Curves as shifted by taxes and subsidies.
-    if(r.tC!==0) curve(q=>r.aD-r.bD*q-r.tC,0,dEnd,[],b,'#2563eb',1,'4 4');
-    if(r.tP!==0) curve(q=>r.cS+r.dS*q+r.tP,r.q0,b.maxQ,[],b,'#16a34a',1,'4 4');
+    if(r.tC!==0) curve(q=>r.WTP(q)-r.tC,0,b.maxQ,r.kinks,b,'#2563eb',1,'4 4');
+    if(r.tP!==0) curve(q=>r.MC(q)+r.tP,0,b.maxQ,r.kinks,b,'#16a34a',1,'4 4');
 
     if(a.showSMB){
       curve(r.SMB,0,b.maxQ,r.kinks,b,'#7c3aed',1.5,'4 2');
@@ -461,10 +469,13 @@
 
     // Markers: optimum (black) and traded outcome (red, with the price wedge if any).
     const side = px => px>W-PAD-110 ? {dx:-6,anchor:'end'} : {dx:6,anchor:'start'};
-    const xs=x(r.Qstar,b), ys=y(clampP(r.Pstar,b),b);
     const same = r.traded && Math.abs(r.Q-r.Qstar)<EPS && Math.abs(r.Pc-r.Pstar)<EPS && Math.abs(r.Pp-r.Pstar)<EPS;
-    dot(xs,ys,4,'#111',markers);
-    if(!same){ const s=side(xs); text(xs+s.dx,ys+14,'Q*='+fmt(r.Qstar),s.anchor,markers); }
+    if(!r.noOptimum){
+      // A corner optimum (Q* = 0 with SMB below SMC) sits on the origin: it has no price.
+      const xs=x(r.Qstar,b), ys=y(r.corner ? 0 : clampP(r.Pstar,b),b);
+      dot(xs,ys,4,'#111',markers);
+      if(!same){ const s=side(xs); text(xs+s.dx,ys+(r.corner?-8:14),'Q*='+fmt(r.Qstar),s.anchor,markers); }
+    }
     if(r.traded){
       const xq=x(r.Q,b), yc=y(clampP(r.Pc,b),b), yp=y(clampP(r.Pp,b),b), s=side(xq);
       if(Math.abs(r.Pc-r.Pp)>EPS){
@@ -484,7 +495,7 @@
     setText('statDem','a='+fmt(r.aD)+', b='+fmt(r.bD));
     setText('statSup','c='+fmt(r.cS)+', d='+fmt(r.dS));
     setText('statEqFree',eqText(r.free.Q,r.free.Pm,'Qf','Pf'));
-    setText('statOpt','Q*='+fmt(r.Qstar)+', P*='+fmt(r.Pstar));
+    setText('statOpt', r.noOptimum ? 'No finite Q*' : r.corner ? 'Q*=0 (corner)' : 'Q*='+fmt(r.Qstar)+', P*='+fmt(r.Pstar));
     setText('statBind', r.binding.length?r.binding.join(', '):'None');
     setText('statOut', r.traded ? 'Q='+fmt(r.Q)+', Pc='+fmt(r.Pc)+', Pp='+fmt(r.Pp) : 'Q=0 (no trade)');
     setText('statGap', r.shortage>EPS ? 'Shortage '+fmt(r.shortage) : r.surplus>EPS ? 'Surplus '+fmt(r.surplus) : 'None');
@@ -497,7 +508,8 @@
     setText('statTS',fmt(r.total));
     setText('statDWL',fmt(r.dwl));
 
-    if(r.Q>r.q1+EPS) showMessage('note','The traded quantity is beyond the point where demand reaches P = 0. Units past that point have no private value to buyers.');
+    if(r.noOptimum) showMessage('note','With these externalities the social marginal benefit never falls below the social marginal cost, so there is no finite optimal quantity and no deadweight loss can be computed. The market outcome is still shown.');
+    else if(r.Q>r.q1+EPS) showMessage('note','The traded quantity is beyond the point where demand reaches P = 0. Units past that point have no private value to buyers.');
     else if(hidden) showMessage('note','Part of a shaded area lies below P = 0 and is not shown on the chart. The numbers in this panel include it.');
     else showMessage('','');
   }
